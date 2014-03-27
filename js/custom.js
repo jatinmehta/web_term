@@ -29,7 +29,7 @@ function termOpen() {
 				cols: 190,
 				row: 100,
 				termDiv: 'termDiv',
-				ps: '[libcloud]$',
+				ps: '>>>',
 				initHandler: termInitHandler,
 				handler: commandHandler,
 				exitHandler: termExitHandler
@@ -205,7 +205,8 @@ function commandHandler() {
 			default:
 				// for test purpose just output argv as list
 				// assemble a string of style-escaped lines and output it in more-mode
-				s=' INDEX  QL  ARGUMENT%n';
+				var command = this.argv.join(' ');	 
+				/* s=' INDEX  QL  ARGUMENT%n';
 				for (var i=0; i<this.argv.length; i++) {
 					s += this.globals.stringReplace('%', '%%',
 							this.globals.fillLeft(i, 6) +
@@ -213,10 +214,39 @@ function commandHandler() {
 							'  "' + this.argv[i] + '"'
 						) + '%n';
 				}
-				this.write(s, 1);
+				this.write(s, 1); */
+				 var myDataObject = {
+				      cmd: command
+				 };
+				 this.send(
+				    {
+				      url:      "",
+				      method:   "post",
+				      data:     myDataObject,
+				      callback: mySocketCallback
+				    }
+				 );
+				 
+				this.write(j, 1);
 				return;
 		}
 	}
 	this.prompt();
 }
 
+ function mySocketCallback() {
+    if (this.socket.succes) {
+       // status 200 OK
+       this.write("Server said:\n" + this.socket.responseText);
+    }
+    else if (this.socket.errno) {
+       // connection failed
+       this.write("Connection error: " + this.socket.errstring);
+    }
+    else {
+       // connection succeeded, but server returned other status than 2xx
+       this.write("Server returned: " +
+                  this.socket.status + " " + this.socket.statusText);
+    }
+    this.prompt()
+  }
