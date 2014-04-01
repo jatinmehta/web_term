@@ -1,6 +1,5 @@
-
 var term, parser;
-
+var output;
 var helpPage=[
 	'%CS%+r Terminal Help %-r%n',
 	'  This is just a sample to demonstrate command line libcloud.',
@@ -19,6 +18,9 @@ var helpPage=[
 	'  in the format <argument index> <quoting level> "<parsed value>".',
 	' '
 ];
+var to_execute = '';
+var send = 0;
+var cmd_type = 'terminal';
 
 function termOpen() {
 	if (!term || term.losed) {
@@ -29,16 +31,19 @@ function termOpen() {
 				cols: 190,
 				row: 100,
 				termDiv: 'termDiv',
-				ps: '>>>',
+				ps: '$',
 				initHandler: termInitHandler,
 				handler: commandHandler,
-				exitHandler: termExitHandler
+				exitHandler: termExitHandler,
+				crsrBlinkMode: true,
+				crsrBlockMode: false,
+				printTab: true
 			}
 		);
 		if (term) term.open();
 		parser=new Parser();
-	
-		
+
+
 		var mainPane = (document.getElementById)?
 			document.getElementById('mainPane') : document.all.mainPane;
 		if (mainPane) mainPane.className = 'lh15 dimmed';
@@ -56,7 +61,7 @@ function termExitHandler() {
 }
 
 function termInitHandler() {
-	
+
 	this.write(
 		[
 			this.globals.center('############################################################', 180),
@@ -64,7 +69,7 @@ function termInitHandler() {
 			this.globals.center('#                 Sample libcloud cli v 1.0                #', 180),
 			this.globals.center('#      Input is echoed as a list of parsed arguments.      #', 180),
 			this.globals.center('#                                                          #', 180),
-			this.globals.center('#      Type "help" for commands.                           #', 180),
+			this.globals.center('#                 Type "help" for commands.                #', 180),
 			this.globals.center('#                                                          #', 180),
 			this.globals.center('#  (c) Python Libcloud 2014; https://libcloud.apache.org/  #', 180),
 			this.globals.center('#                                                          #', 180),
@@ -72,7 +77,7 @@ function termInitHandler() {
 			'%n'
 		]
 	);
-	
+
 	this.statusLine('', 8,2);
 	this.statusLine(' +++ This is just a dummy cli libcloud. Type "help" for help. +++');
 	this.maxLines -= 2;
@@ -81,7 +86,12 @@ function termInitHandler() {
 }
 
 function commandHandler() {
+
 	this.newLine();
+	var argv = [''];     // arguments vector
+	var argQL = ['', '"'];    // quoting level
+	var argc = 0;        // arguments cursor
+	var escape = true ; // escape flag
 	// check for raw mode first (should not be parsed)
 	if (this.rawMode) {
 		if (this.env.getPassword) {
@@ -102,151 +112,127 @@ function commandHandler() {
 		this.prompt();
 		return;
 	}
-	
-	parser.parseLine(this);
-	if (this.argv.length == 0) {
-		// no commmand line input
-	}
-	else if (this.argQL[0]) {
-	    // first argument quoted -> error
-		this.write("Syntax error: first argument quoted.");
-	}
-	else {
-		var cmd = this.argv[this.argc++];
-		/*
-		  process commands now
-		  1st argument: this.argv[this.argc]
-		*/
-		switch (cmd) {
-			case 'help':
-				this.write(helpPage);
-				break;
-			case 'clear':
-				// get options
-				var opts = parser.getopt(this, 'aA');
-				if (opts.a) {
-					// discard status line on opt "a" or "A"
-					this.maxLines = this.conf.rows;
-				}
-				this.clear();
-				break;
-			case 'number':
-				// test for value options
-				var opts = parser.getopt(this, 'n');
-				if (opts.illegals.length) {
-					this.type('illegal option. usage: number -n<value>');
-				}
-				else if ((opts.n) && (opts.n.value != -1)) {
-					this.type('option value: '+opts.n.value);
-				}
-				else {
-					this.type('usage: number -n<value>');
-				}
-				break;
-			case 'repeat':
-				// another test for value options
-				var opts = parser.getopt(this, 'n');
-				if (opts.illegals.length) {
-					this.type('illegal option. usage: repeat -n<value> <string>');
-				}
-				else if ((opts.n) && (opts.n.value != -1)) {
-					// first normal argument is again this.argv[this.argc]
-					var s = this.argv[this.argc];
-					if (typeof s != 'undefined') {
-						// repeat this string n times
-						var a = [];
-						for (var i=0; i<opts.n.value; i++) a[a.length] = s;
-						this.type(a.join(' '));
+
+	if (cmd_type == 'terminal') {
+		parser.parseLine(this);
+		if (this.argv.length == 0) {
+			// no commmand line input
+		}
+		else if (this.argQL[0]) {
+		    // first argument quoted -> error
+			this.write("Syntax error: first argument quoted.");
+		}
+		else {
+			var cmd = this.argv[this.argc++];
+			switch (cmd) {
+				case 'help':
+					this.write(helpPage);
+					break;
+					to_execute = '';
+				case 'clear':
+					// get options
+					var opts = parser.getopt(this, 'aA');
+					if (opts.a) {
+						// discard status line on opt "a" or "A"
+						this.maxLines = this.conf.rows;
 					}
-				}
-				else {
-					this.type('usage: repeat -n<value> <string>');
-				}
-				break;
-			case 'login':
-				// sample login (test for raw mode)
-				if ((this.argc == this.argv.length) || (this.argv[this.argc] == '')) {
-					this.type('usage: login <username>');
-				}
-				else {
-					this.env.getPassword = true;
-					this.env.username = this.argv[this.argc];
-					this.write('%+iSample login: repeat username as password.%-i%n');
-					this.type('password: ');
-					// exit in raw mode (blind input)
-					this.rawMode = true;
-					this.lock = false;
-					return;
-				}
-				break;
-			case 'dump':
-				var opts = parser.getopt(this, 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ');
-				for (var p in opts) {
-					if (p == 'illegals') {
-						if (opts.illegals.length) {
-							this.type('  illegal options: "'+opts.illegals.join('", "')+'"');
-							this.newLine();
-						}
+					this.clear();
+					break;
+					to_execute = '';
+				case 'login':
+					// sample login (test for raw mode)
+					if ((this.argc == this.argv.length) || (this.argv[this.argc] == '')) {
+						this.type('usage: login <username>');
 					}
 					else {
-						this.type('  option "'+p+'" value '+opts[p].value);
-						this.newLine();
+						this.env.getPassword = true;
+						this.env.username = this.argv[this.argc];
+						this.write('%+iSample login: repeat username as password.%-i%n');
+						this.type('password: ');
+						// exit in raw mode (blind input)
+						this.rawMode = true;
+						this.lock = false;
+						return;
 					}
+					to_execute = '';
+					break;
+				case 'exit':
+					this.close();
+					to_execute = '';
+				case 'python':
+					this.ps = '>>>';
+					cmd_type = 'python';
+					break;
+				default:
+					this.write('Not a command');
+					this.prompt();
+					return;
+			}
+		}
+
+	} else if (cmd_type == 'python'){
+		var keywords = ['for', 'class', 'while', 'if', 'else', 'elif'];
+		
+		var command = '';
+		for (var i=0; i<this.lineBuffer.length; i++) {
+			var ch= this.lineBuffer.charAt(i);
+			command += ch;
+		} 
+
+		if (command.length > 0) {
+			for (var i = 0; i < keywords.length; i++) {
+				if (command.indexOf(keywords[i]) == 0 && command.indexOf(':') == command.length - 1) {
+					send = 1;
+					this.ps = '...';
+					
+					break;
 				}
-				while (this.argc<this.argv.length) {
-					var ql = this.argQL[this.argc] || '-';
-					this.type('  argument [QL: '+ql+'] "'+this.argv[this.argc++]+'"');
-					this.newLine();
-				}
-				break;
-			case 'exit':
-				this.close();
-				return;
-			default:
-				// for test purpose just output argv as list
-				// assemble a string of style-escaped lines and output it in more-mode
-				var command = this.argv.join(' ');	 
-				/* s=' INDEX  QL  ARGUMENT%n';
-				for (var i=0; i<this.argv.length; i++) {
-					s += this.globals.stringReplace('%', '%%',
-							this.globals.fillLeft(i, 6) +
-							this.globals.fillLeft((this.argQL[i])? this.argQL[i]:'-', 4) +
-							'  "' + this.argv[i] + '"'
-						) + '%n';
-				}
-				this.write(s, 1); */
-				 var myDataObject = {
-				      cmd: command
-				 };
-				 this.send(
-				    {
-				      url:      "",
-				      method:   "post",
-				      data:     myDataObject,
-				      callback: mySocketCallback
-				    }
-				 );
-				 
-				this.write(j, 1);
-				return;
+			}
+			to_execute += command;
+
+			if (send == 1) {
+				command = '';
+			} else {
+				send = 2;
+				this.ps = '>>>';
+			}
+			
+		} else if (command.length == 0 && send == 1) {
+			send = 2;
+			this.ps = '>>>';
+		}
+
+		if (send == 2) {
+
 		}
 	}
+	
 	this.prompt();
 }
 
- function mySocketCallback() {
-    if (this.socket.succes) {
+function getOutput ( to_execute, callback ) {
+		$.ajax({
+			type: "GET",
+			url : "/repl/",
+			data: {"code":to_execute},
+			contentType: "application/x-www-form-urlencoded;charset=UTF-8",
+			success: function(result){
+
+				callback(result);
+
+			}
+		});
+}
+
+function callback(output) {
+
+    if (output) {
        // status 200 OK
-       this.write("Server said:\n" + this.socket.responseText);
-    }
-    else if (this.socket.errno) {
-       // connection failed
-       this.write("Connection error: " + this.socket.errstring);
-    }
-    else {
+       term.write(output.output+output.error);
+    }  else {
        // connection succeeded, but server returned other status than 2xx
-       this.write("Server returned: " +
-                  this.socket.status + " " + this.socket.statusText);
+       term.write("Server returned: " +  "nothing returned");
     }
-    this.prompt()
-  }
+    term.prompt();
+    return;
+}
