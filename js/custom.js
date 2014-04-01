@@ -203,7 +203,7 @@ function commandHandler() {
 		}
 
 		if (send == 2) {
-
+			getOutput(to_execute, callback);
 		}
 	}
 	
